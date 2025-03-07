@@ -3,7 +3,7 @@ import numpy as np
 
 class OpponentStrategy:
 
-    def __init__(self, repeats=10, shuffle=True, sequence=None):
+    def __init__(self, repeats=7, shuffle=True, sequence=None):
         self.repeats = repeats
         self.counter = -1
         self.current_action = 0
