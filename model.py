@@ -19,6 +19,8 @@ PAYOFFS = {
 ACTION_SPACE = [0, 1]  # Action space: 0 = Cooperate, 1 = Defect
 INPUT_SIZE = 2  # Model input size: [agent, opponent]
 
+DISCOUNT_FACTOR = 0.9
+
 
 def initialize_random_seed(seed: int | None):
     """Initializes randomness using the seed."""
@@ -42,13 +44,12 @@ class PolicyNetwork(nn.Module):
 
 class Model:
 
-    def __init__(self, model_filename: str, num_rounds_range: int | tuple[int, int], num_episodes: int, opponent_strategy,
-                 discount_factor=0.9, seed: int | None = None):
+    def __init__(self, model_filename: str, num_rounds_range: int | tuple[int, int], num_episodes: int, opponent_strategy, seed: int | None = None):
         self.model_filename = model_filename
         self.num_rounds_range = num_rounds_range
         self.num_episodes = num_episodes
         self.opponent_strategy = opponent_strategy
-        self.discount_factor = discount_factor
+        self.discount_factor = DISCOUNT_FACTOR
         self.seed = seed
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -72,7 +73,7 @@ class Model:
 
         for ep in range(self.num_episodes):
             if ep % 100 == 0 and ep != 0:
-                self.eval_policy(30)
+                self.eval_policy(40)
 
             num_rounds = get_rounds_number(self.num_rounds_range)
             episode_states, episode_actions, episode_rewards = Game().play_episode(self.model,
@@ -99,25 +100,27 @@ class Model:
             total_reward = np.sum(episode_rewards)
             print(f'Episode {ep + 1}/{self.num_episodes}: Loss = {loss.item():.3f}, Total Reward = {total_reward}')
 
-        self.save_model()
-        print(f'Training complete. Model saved to \'{self.model_filename}\'.')
+        self.model.eval()
+        if self.save_model():
+            print(f"Training complete. Model saved to '{self.model_filename}'.")
         return self.model
 
-    def save_model(self, overwrite=False):
+    def save_model(self, overwrite=False) -> bool:
         path = Path(self.model_filename)
         if not path.parent.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists() or overwrite:
             torch.save(self.model.state_dict(), self.model_filename)
+            return True
+        return False
 
     def load_model(self):
         if Path(self.model_filename).exists():
-            model = self.build_policy_network()
+            self.model = self.build_policy_network()
             print(f'Loading model from file: "{self.model_filename}"')
-            model.load_state_dict(torch.load(self.model_filename))
-            model.eval()
-            self.model = model
-            return model
+            self.model.load_state_dict(torch.load(self.model_filename))
+            self.model.eval()
+            return self.model
         return None
 
     def eval_policy(self, num_eval_episodes: int = 10):
