@@ -36,6 +36,7 @@ class OpponentStrategy:
         if self.counter == self.repeats:
             self.counter = 0
             self.current_action = (self.current_action + 1) % len(self.strategies_sequence)
+            self.repeats = self.strategies_sequence[self.current_action][1]
         if self.current_action == 0 and self.shuffle:
             self.shuffle_strategies()
         return self.strategies_sequence[self.current_action][0]
@@ -58,11 +59,20 @@ class OpponentStrategy:
     def shuffle_strategies(self):
         np.random.shuffle(self.strategies_sequence)
 
-    def __str__(self):
-        sequence = [strategy.short_name for strategy, _ in self.strategies_sequence]
+    def _names(self, short=True):
+        if short:
+            sequence = [strategy.short_name for strategy, _ in self.strategies_sequence]
+        else:
+            sequence = [strategy.name for strategy, _ in self.strategies_sequence]
         if self.shuffle:
             sequence = sorted(sequence)
         return '_'.join(sequence)
+
+    def short_names(self):
+        return self._names(short=True)
+
+    def names(self):
+        return self._names(short=False)
 
     def __format__(self, format_spec):
         result = ''

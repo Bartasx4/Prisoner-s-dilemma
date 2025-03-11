@@ -7,6 +7,7 @@ import torch.optim as optim
 from torch.distributions import Categorical
 
 from game import Game, get_rounds_number
+from modelPlot import ModelPlot
 
 # Payoff matrix for the agent (row) and opponent (column)
 PAYOFFS = {
@@ -20,6 +21,7 @@ ACTION_SPACE = [0, 1]  # Action space: 0 = Cooperate, 1 = Defect
 INPUT_SIZE = 2  # Model input size: [agent, opponent]
 
 DISCOUNT_FACTOR = 0.9
+EVAL_EVERY = 10
 
 
 def initialize_random_seed(seed: int | None):
@@ -44,8 +46,7 @@ class PolicyNetwork(nn.Module):
 
 class Model:
 
-    def __init__(self, model_filename: str, num_rounds_range: int | tuple[int, int], num_episodes: int, opponent_strategy, seed: int | None = None):
-        self.model_filename = model_filename
+    def __init__(self, num_rounds_range: int | tuple[int, int], num_episodes: int, opponent_strategy, seed: int | None = None):
         self.num_rounds_range = num_rounds_range
         self.num_episodes = num_episodes
         self.opponent_strategy = opponent_strategy
@@ -67,13 +68,22 @@ class Model:
         returns = (returns - np.mean(returns)) / (np.std(returns) + 1e-8)
         return returns
 
+    def create_file_name(self, short=True) -> str:
+        return f'{self.create_model_name(short)}.h5'
+
+    def create_model_name(self, short=True) -> str:
+        num_rounds_str = f'{self.num_rounds_range[0]}_{self.num_rounds_range[1]}'
+        names = self.opponent_strategy.short_names() if short else self.opponent_strategy.names()
+        return f'{self.num_episodes}-{num_rounds_str}-{names}'
+
     def train_agent(self):
         self.model = self.build_policy_network()
         optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+        eval_histories = []
 
         for ep in range(self.num_episodes):
-            if ep % 100 == 0 and ep != 0:
-                self.eval_policy(40)
+            if ep % EVAL_EVERY == 0 and ep != 0:
+                eval_histories.append(self.eval_policy(40))
 
             num_rounds = get_rounds_number(self.num_rounds_range)
             episode_states, episode_actions, episode_rewards = Game().play_episode(self.model,
@@ -102,23 +112,31 @@ class Model:
 
         self.model.eval()
         if self.save_model():
-            print(f"Training complete. Model saved to '{self.model_filename}'.")
+            print(f"Training complete. Model saved to '{self.path}'.")
+        title = self.create_model_name(short=False)
+        ModelPlot(check_every=EVAL_EVERY,
+                  total_rewards=eval_histories,
+                  title=title,
+                  filename=f'{self.__module__}/{title}.png',
+                  save=True,
+                  show=True)
         return self.model
 
     def save_model(self, overwrite=False) -> bool:
-        path = Path(self.model_filename)
+        path = Path(self.path)
         if not path.parent.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists() or overwrite:
-            torch.save(self.model.state_dict(), self.model_filename)
+            torch.save(self.model.state_dict(), self.path)
             return True
         return False
 
     def load_model(self):
-        if Path(self.model_filename).exists():
+        model_filename = self.path
+        if Path(model_filename).exists():
             self.model = self.build_policy_network()
-            print(f'Loading model from file: "{self.model_filename}"')
-            self.model.load_state_dict(torch.load(self.model_filename))
+            print(f'Loading model from file: "{model_filename}"')
+            self.model.load_state_dict(torch.load(model_filename))
             self.model.eval()
             return self.model
         return None
@@ -139,17 +157,8 @@ class Model:
                 total_reward = np.sum(rewards)
                 total_rewards.append(total_reward)
                 all_histories.append(history)
+        return total_rewards
 
-        # Compute statistics
-        avg_reward = np.mean(total_rewards)
-        max_reward = np.max(total_rewards)
-        min_reward = np.min(total_rewards)
-
-        print(f'\nModel evaluation on {num_eval_episodes} episodes:')
-        print(f'Average reward: {avg_reward:.2f}')
-        print(f'Highest reward: {max_reward}')
-        print(f'Lowest reward: {min_reward}')
-
-        # Return evaluation details as a dictionary
-        return dict(average_reward=avg_reward, max_reward=max_reward, min_reward=min_reward,
-                    total_rewards_per_episode=total_rewards, histories=all_histories)
+    @property
+    def path(self):
+        return f'{self.__module__}/{self.create_file_name()}'
