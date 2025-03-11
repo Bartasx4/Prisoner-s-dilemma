@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
 
-from game import Game, get_rounds_number
+from game import Game, get_rounds_number, get_state
 from modelPlot import ModelPlot
 
 # Payoff matrix for the agent (row) and opponent (column)
@@ -81,7 +81,7 @@ class Model:
         state_input = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
         action_probabilities = self.model(state_input).detach().cpu().numpy()[0]
         action = np.random.choice(ACTION_SPACE, p=action_probabilities)
-        return action, action_probabilities, state
+        return action
 
     def train_agent(self):
         self.model = self.build_policy_network()
@@ -169,13 +169,3 @@ class Model:
     @property
     def path(self):
         return f'{self.__module__}/{self.create_file_name()}'
-
-
-def get_state(history: list[tuple[int, int]], num_rounds: int) -> np.ndarray:
-    state_seq = []
-    for (agent, opponent) in history:
-        state_seq.append(np.array([agent, opponent]))
-    padded = np.zeros((num_rounds, 2), dtype=np.float32)
-    if len(state_seq) > 0:
-        padded[:len(state_seq), :] = np.array(state_seq, dtype=np.float32)
-    return padded

@@ -28,22 +28,17 @@ class Game:
         episode_actions = []
         episode_rewards = []
 
-        agent_history = []
-
         num_rounds = get_rounds_number(num_rounds)
-
         for t in range(num_rounds):
-            agent_action, action_probabilities, state = agent_strategy.get_action(history, num_rounds)
+            agent_action = agent_strategy.get_action(history, num_rounds)
+            opponent_action = opponent_strategy.get_action(history, num_rounds)
+            reward = PAYOFFS[(agent_action, opponent_action)]
+
             episode_actions.append(agent_action)
-            episode_states.append(state)
-
-            opp_action = opponent_strategy.get_action(history, num_rounds)
-
-            reward = PAYOFFS[(agent_action, opp_action)]
+            episode_states.append(get_state(history, num_rounds))
             episode_rewards.append(reward)
 
-            history.append((agent_action, opp_action))
-            agent_history.append(agent_action)
+            history.append((agent_action, opponent_action))
 
         if training:
             return episode_states, episode_actions, episode_rewards
@@ -77,3 +72,13 @@ class Game:
 
 def get_rounds_number(num_rounds: int | tuple[int, int]) -> int:
     return num_rounds if isinstance(num_rounds, int) else np.random.randint(num_rounds[0], num_rounds[1])
+
+
+def get_state(history: list[tuple[int, int]], num_rounds: int) -> np.ndarray:
+    state_seq = []
+    for (agent, opponent) in history:
+        state_seq.append(np.array([agent, opponent]))
+    padded = np.zeros((num_rounds, 2), dtype=np.float32)
+    if len(state_seq) > 0:
+        padded[:len(state_seq), :] = np.array(state_seq, dtype=np.float32)
+    return padded
