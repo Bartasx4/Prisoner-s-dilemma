@@ -76,6 +76,13 @@ class Model:
         names = self.opponent_strategy.short_names() if short else self.opponent_strategy.names()
         return f'{self.num_episodes}-{num_rounds_str}-{names}'
 
+    def get_action(self, history, num_rounds):
+        state = get_state(history, num_rounds)
+        state_input = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        action_probabilities = self.model(state_input).detach().cpu().numpy()[0]
+        action = np.random.choice(ACTION_SPACE, p=action_probabilities)
+        return action, action_probabilities, state
+
     def train_agent(self):
         self.model = self.build_policy_network()
         optimizer = optim.Adam(self.model.parameters(), lr=0.01)
@@ -86,7 +93,7 @@ class Model:
                 eval_histories.append(self.eval_policy(40))
 
             num_rounds = get_rounds_number(self.num_rounds_range)
-            episode_states, episode_actions, episode_rewards = Game().play_episode(self.model,
+            episode_states, episode_actions, episode_rewards = Game().play_episode(self,
                                                                                    num_rounds,
                                                                                    self.opponent_strategy,
                                                                                    training=True)
@@ -153,7 +160,7 @@ class Model:
             for _ in range(num_eval_episodes):
                 # Play an episode in non-training mode
                 num_rounds = get_rounds_number(self.num_rounds_range)
-                history, rewards = Game().play_episode(self.model,num_rounds,self.opponent_strategy, training=False)
+                history, rewards = Game().play_episode(self, num_rounds, self.opponent_strategy, training=False)
                 total_reward = np.sum(rewards)
                 total_rewards.append(total_reward)
                 all_histories.append(history)
@@ -162,3 +169,13 @@ class Model:
     @property
     def path(self):
         return f'{self.__module__}/{self.create_file_name()}'
+
+
+def get_state(history: list[tuple[int, int]], num_rounds: int) -> np.ndarray:
+    state_seq = []
+    for (agent, opponent) in history:
+        state_seq.append(np.array([agent, opponent]))
+    padded = np.zeros((num_rounds, 2), dtype=np.float32)
+    if len(state_seq) > 0:
+        padded[:len(state_seq), :] = np.array(state_seq, dtype=np.float32)
+    return padded

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Type
 import numpy as np
 
 
@@ -8,7 +9,7 @@ class Strategy(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def get_action(self, agent_history, probabilities):
+    def get_action(self, history, probabilities):
         pass
 
     @property
@@ -45,15 +46,16 @@ class OpponentStrategy:
         strategy = self._next_action()
         return strategy.get_action(agent_history, probabilities)
 
-    def add_strategy(self, strategy:Strategy | list[Strategy], repeats=None):
+    def add_strategy(self, strategy:Strategy | list[Strategy], repeats=None) -> Type['OpponentStrategy']:
         if isinstance(strategy, list):
             for s in strategy:
                 self.add_strategy(s, repeats)
         else:
             self.strategies_sequence.append((strategy, repeats or self.repeats))
+        return self
 
     def build_sequence(self, repeats=None):
-        self.add_strategy([TitForTat(), TitForTatWithProbability(), RandomDecision(), RandomWithProbabilities(), Opposite()], repeats)
+        self.add_strategy([TitForTat(), TitForTatWithProbability(), RandomDecision(), Opposite()], repeats)
         return self
 
     def shuffle_strategies(self):
@@ -64,9 +66,9 @@ class OpponentStrategy:
             sequence = [strategy.short_name for strategy, _ in self.strategies_sequence]
         else:
             sequence = [strategy.name for strategy, _ in self.strategies_sequence]
-        if self.shuffle:
-            sequence = sorted(sequence)
-        return '_'.join(sequence)
+        if self.shuffle and isinstance(sequence, list):
+            sequence = '_'.join(sorted(sequence))
+        return sequence
 
     def short_names(self):
         return self._names(short=True)
@@ -91,10 +93,10 @@ class OpponentStrategy:
 
 class TitForTat(Strategy):
 
-    def get_action(self, agent_history, *args):
-        if len(agent_history) > 0:
+    def get_action(self, history, *_) -> int:
+        if len(history) > 0:
             # Tit-for-tat: repeat agent's previous action.
-            return agent_history[-1]
+            return history[-1][0]
         else:
             return 0  # cooperate the first round
 
@@ -104,9 +106,9 @@ class TitForTatWithProbability(Strategy):
     def __init__(self, probability=0.8):
         self.probability = probability
 
-    def get_action(self, agent_history, *args):
-        if len(agent_history) > 0:
-            action = np.random.choice([agent_history[-1], 1 - agent_history[-1]], p=[self.probability, 1 - self.probability])
+    def get_action(self, history, *_) -> int:
+        if len(history) > 0:
+            action = np.random.choice([history[-1][0], 1 - history[-1][0]], p=[self.probability, 1 - self.probability])
         else:
             action = np.random.choice([0, 1])
         return action
@@ -114,21 +116,15 @@ class TitForTatWithProbability(Strategy):
 
 class RandomDecision(Strategy):
 
-    def get_action(self, agent_history, probabilities):
+    def get_action(self, *_) -> int:
         return np.random.choice([0, 1])
-
-
-class RandomWithProbabilities(Strategy):
-
-    def get_action(self, agent_history, probabilities):
-        return np.random.choice([0, 1], p=probabilities)
 
 
 class Opposite(Strategy):
 
-    def get_action(self, agent_history, probabilities):
-        if len(agent_history) > 0:
-            action = 1 - agent_history[-1]
+    def get_action(self, history, *_) -> int:
+        if len(history) > 0:
+            action = 1 - history[-1][0]
         else:
             action = np.random.choice([0, 1])
         return action

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from opponentStrategy import OpponentStrategy
+from opponentStrategy import OpponentStrategy, Strategy
 
 
 # Payoff matrix for the agent (row) and opponent (column)
@@ -21,7 +21,8 @@ class Game:
     def __init__(self):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    def play_episode(self, model, num_rounds: int | tuple[int, int], opponent_strategy: OpponentStrategy, training=True):
+    @staticmethod
+    def play_episode(agent_strategy, num_rounds: int | tuple[int, int], opponent_strategy: OpponentStrategy | Strategy, training=True):
         history = []
         episode_states = []
         episode_actions = []
@@ -32,15 +33,11 @@ class Game:
         num_rounds = get_rounds_number(num_rounds)
 
         for t in range(num_rounds):
-            state = get_state(history, num_rounds)
+            agent_action, action_probabilities, state = agent_strategy.get_action(history, num_rounds)
+            episode_actions.append(agent_action)
             episode_states.append(state)
 
-            state_input = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
-            action_probabilities = model(state_input).detach().cpu().numpy()[0]
-            agent_action = np.random.choice(ACTION_SPACE, p=action_probabilities)
-            episode_actions.append(agent_action)
-
-            opp_action = opponent_strategy.get_action(agent_history, action_probabilities)
+            opp_action = opponent_strategy.get_action(history, num_rounds)
 
             reward = PAYOFFS[(agent_action, opp_action)]
             episode_rewards.append(reward)
@@ -53,8 +50,8 @@ class Game:
         else:
             return history, episode_rewards
 
-    def run_game(self, model, num_rounds: int | tuple[int, int], opponent_strategy: OpponentStrategy, display_max=50):
-        history, rewards = self.play_episode(model, num_rounds, opponent_strategy, training=False)
+    def run_game(self, agent_strategy, num_rounds: int | tuple[int, int], opponent_strategy: OpponentStrategy | Strategy, display_max=50):
+        history, rewards = self.play_episode(agent_strategy, num_rounds, opponent_strategy, training=False)
         agent_moves = ['Cooperate' if a == 0 else "Defect" for a, _ in history]
         opp_moves = ['Cooperate' if o == 0 else "Defect" for _, o in history]
         rounds = list(range(1, len(agent_moves) + 1))
@@ -80,13 +77,3 @@ class Game:
 
 def get_rounds_number(num_rounds: int | tuple[int, int]) -> int:
     return num_rounds if isinstance(num_rounds, int) else np.random.randint(num_rounds[0], num_rounds[1])
-
-
-def get_state(history: list[tuple[int, int]], num_rounds: int) -> np.ndarray:
-    state_seq = []
-    for (agent, opponent) in history:
-        state_seq.append(np.array([agent, opponent]))
-    padded = np.zeros((num_rounds, 2), dtype=np.float32)
-    if len(state_seq) > 0:
-        padded[:len(state_seq), :] = np.array(state_seq, dtype=np.float32)
-    return padded
