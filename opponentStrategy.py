@@ -1,19 +1,21 @@
 from abc import ABC, abstractmethod
-from typing import Type
 import numpy as np
 
 
 class Strategy(ABC):
+    """Abstract base class for defining strategies."""
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__class__.__name__
 
     @abstractmethod
     def get_action(self, history, probabilities):
+        """Defines the action selection logic for the strategy."""
         pass
 
     @property
-    def name(self):
+    def name(self) -> str:
+        """Full name of the strategy."""
         return self.__class__.__name__
 
     @property
@@ -24,15 +26,25 @@ class Strategy(ABC):
 
 
 class OpponentStrategy:
+    """
+    Manages opponent strategies in a game.
 
-    def __init__(self, repeats=7, shuffle=True):
+    This class allows dynamic switching, shuffling, and sequencing
+    of multiple strategies for the opponent in iterative games.
+    """
+
+    def __init__(self, repeats: int = 7, shuffle: bool = True):
+        """
+        Initialize the strategy manager.
+        """
         self.repeats = repeats
         self.counter = -1
         self.current_action = 0
         self.shuffle = shuffle
         self.strategies_sequence: list[tuple[Strategy, int]] = []
 
-    def _next_action(self):
+    def _next_action(self) -> Strategy:
+        """Switches to the next strategy in the sequence."""
         self.counter += 1
         if self.counter == self.repeats:
             self.counter = 0
@@ -42,11 +54,12 @@ class OpponentStrategy:
             self.shuffle_strategies()
         return self.strategies_sequence[self.current_action][0]
 
-    def get_action(self, agent_history, probabilities):
+    def get_action(self, agent_history, probabilities) -> int:
+        """Gets the next action from the currently active strategy."""
         strategy = self._next_action()
         return strategy.get_action(agent_history, probabilities)
 
-    def add_strategy(self, strategy:Strategy | list[Strategy], repeats=None) -> Type['OpponentStrategy']:
+    def add_strategy(self, strategy:Strategy | list[Strategy], repeats=None) -> 'OpponentStrategy':
         if isinstance(strategy, list):
             for s in strategy:
                 self.add_strategy(s, repeats)
@@ -54,30 +67,37 @@ class OpponentStrategy:
             self.strategies_sequence.append((strategy, repeats or self.repeats))
         return self
 
-    def build_sequence(self, repeats=None):
+    def build_sequence(self, repeats: int = None) -> 'OpponentStrategy':
+        """
+        Pre-configures a default sequence of strategies.
+        """
         self.add_strategy([TitForTat(), TitForTatWithProbability(), RandomDecision(), Opposite()], repeats)
         return self
 
     def shuffle_strategies(self):
+        """Randomly shuffles the sequence of strategies."""
         np.random.shuffle(self.strategies_sequence)
 
-    def _names(self, short=True, connector='_'):
-        if short:
-            sequence = [strategy.short_name for strategy, _ in self.strategies_sequence]
-        else:
-            sequence = [strategy.name for strategy, _ in self.strategies_sequence]
-        if self.shuffle and isinstance(sequence, list):
-            sequence = connector.join(sorted(sequence))
-        return sequence
+    def _names(self, short=True, connector='_') -> str:
+        """
+                Helper function to generate a sequence of strategy names.
+        """
+        sequence = [strategy.short_name if short else strategy.name for strategy, _ in self.strategies_sequence]
+        if self.shuffle:
+            sequence = sorted(sequence)  # Sort only for display purposes
+        return connector.join(sequence)
 
-    def short_names(self):
+    def short_names(self) -> str:
+        """Returns a joined string of short names for strategies."""
         return self._names(short=True)
 
-    def clean_names(self):
+    def clean_names(self) -> str:
+        """Returns a joined string of full names for strategies."""
         return self._names(short=False, connector=', ')
 
-    def names(self):
-        return self._names(short=False)
+    def names(self) -> str:
+        """Alias for clean_names."""
+        return self.clean_names()
 
     def __format__(self, format_spec):
         result = ''
@@ -94,7 +114,10 @@ class OpponentStrategy:
                 raise ValueError
 
 
+# Concrete strategy classes
+
 class TitForTat(Strategy):
+    """Repeats the opponent's previous action (if available)."""
 
     def get_action(self, history, *_) -> int:
         if len(history) > 0:
@@ -105,6 +128,7 @@ class TitForTat(Strategy):
 
 
 class TitForTatWithProbability(Strategy):
+    """Tit-for-Tat strategy with probabilistic deviations."""
 
     def __init__(self, probability=0.8):
         self.probability = probability
@@ -118,12 +142,14 @@ class TitForTatWithProbability(Strategy):
 
 
 class RandomDecision(Strategy):
+    """Always selects a random action."""
 
     def get_action(self, *_) -> int:
         return np.random.choice([0, 1])
 
 
 class Opposite(Strategy):
+    """Always opposes the opponent's previous action."""
 
     def get_action(self, history, *_) -> int:
         if len(history) > 0:
