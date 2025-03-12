@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 class ModelPlot:
 
     def __init__(self, check_every, total_rewards, title='Progress', filename:str = None, save=False, show=True):
+        plt.style.use('seaborn-v0_8-dark') # Albo np. 'ggplot'
+
         self.draw_plot(check_every, total_rewards, title, filename, save, show)
 
     @classmethod
@@ -26,10 +28,11 @@ class ModelPlot:
         plt.title(title)
         plt.legend()
 
-        plt.grid(True)
+        # plt.grid(True)
+        plt.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.7)
 
         if save and filename:
-            plt.savefig(filename)
+            plt.savefig(filename, dpi=300)
 
         if show:
             plt.show()

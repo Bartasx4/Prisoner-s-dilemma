@@ -61,17 +61,20 @@ class OpponentStrategy:
     def shuffle_strategies(self):
         np.random.shuffle(self.strategies_sequence)
 
-    def _names(self, short=True):
+    def _names(self, short=True, connector='_'):
         if short:
             sequence = [strategy.short_name for strategy, _ in self.strategies_sequence]
         else:
             sequence = [strategy.name for strategy, _ in self.strategies_sequence]
         if self.shuffle and isinstance(sequence, list):
-            sequence = '_'.join(sorted(sequence))
+            sequence = connector.join(sorted(sequence))
         return sequence
 
     def short_names(self):
         return self._names(short=True)
+
+    def clean_names(self):
+        return self._names(short=False, connector=', ')
 
     def names(self):
         return self._names(short=False)
